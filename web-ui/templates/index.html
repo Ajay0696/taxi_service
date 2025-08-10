@@ -1,26 +1,37 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Taxi Service - Passenger UI</title>
+  <title>Taxi Service</title>
 </head>
 <body>
-    <h1>Request a Ride</h1>
-    <form action="/request_ride" method="post">
-        <label>Passenger ID:</label>
-        <input type="number" name="passenger_id" required>
-        <button type="submit">Request Ride</button>
-    </form>
+  <h1>Taxi Service — Passenger UI</h1>
 
-    <h2>Check Ride Status</h2>
-    <form action="/ride_status" method="post">
-        <label>Ride ID:</label>
-        <input type="number" name="ride_id" required>
-        <button type="submit">Check Status</button>
-    </form>
+  <h2>Register Passenger</h2>
+  <form action="/register" method="post">
+    <label>Name:</label>
+    <input type="text" name="name" required>
+    <button type="submit">Register</button>
+  </form>
 
-    {% if ride_status %}
-    <h3>Ride Status:</h3>
-    <pre>{{ ride_status | tojson(indent=2) }}</pre>
-    {% endif %}
+  <h2>Request Ride</h2>
+  <form action="/request_ride" method="post">
+    <label>Passenger ID:</label>
+    <input type="number" name="passenger_id" required>
+    <button type="submit">Request Ride</button>
+  </form>
+
+  <h2>Check Ride Status</h2>
+  <form action="/ride_status" method="post">
+    <label>Ride ID:</label>
+    <input type="number" name="ride_id" required>
+    <button type="submit">Check Status</button>
+  </form>
+
+  <hr>
+
+  {% if result %}
+    <h3>Result</h3>
+    <pre>{{ result | tojson(indent=2) }}</pre>
+  {% endif %}
 </body>
 </html>

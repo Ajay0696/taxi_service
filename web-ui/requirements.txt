@@ -1,12 +1,11 @@
 fastapi
 uvicorn[standard]
-psycopg2-binary
+httpx
+jinja2
 python-json-logger
 opentelemetry-api
 opentelemetry-sdk
 opentelemetry-exporter-jaeger
 opentelemetry-instrumentation-fastapi
-httpx  # Only needed in web-ui
-jinja2 # Only needed in web-ui
-deprecated   # <--- add this
 python-multipart
+deprecated

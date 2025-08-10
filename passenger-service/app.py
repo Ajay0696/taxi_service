@@ -1,3 +1,4 @@
+# passenger-service/app.py
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import psycopg2
@@ -12,20 +13,21 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 
-# Logging setup
-logger = logging.getLogger("passenger-service")
-file_handler = logging.FileHandler("/tmp/web-ui.log")
+# Logging
+SERVICE_NAME = "passenger-service"
+logger = logging.getLogger(SERVICE_NAME)
+log_path = f"/tmp/{SERVICE_NAME}.log"
+file_handler = logging.FileHandler(log_path)
 formatter = jsonlogger.JsonFormatter('%(asctime)s %(name)s %(levelname)s %(message)s trace_id=%(trace_id)s span_id=%(span_id)s')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
+logger.addHandler(logging.StreamHandler())
 logger.setLevel(logging.INFO)
 
-# Tracing setup
-resource = Resource.create({"service.name": "passenger-service"})
+# Tracing
+resource = Resource.create({"service.name": SERVICE_NAME})
 provider = TracerProvider(resource=resource)
-jaeger_exporter = JaegerExporter(
-    collector_endpoint=os.getenv("JAEGER_COLLECTOR", "http://jaeger:14268/api/traces")
-)
+jaeger_exporter = JaegerExporter(collector_endpoint=os.getenv("JAEGER_COLLECTOR", "http://jaeger:14268/api/traces"))
 provider.add_span_processor(BatchSpanProcessor(jaeger_exporter))
 trace.set_tracer_provider(provider)
 
@@ -37,6 +39,9 @@ DB_NAME = os.getenv("DB_NAME", "taxi_db")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASS = os.getenv("DB_PASS", "postgres")
 
+class Passenger(BaseModel):
+    name: str
+
 class RideRequest(BaseModel):
     passenger_id: int
 
@@ -46,10 +51,22 @@ def get_db_conn():
 def get_trace_context():
     span = trace.get_current_span()
     if span and span.get_span_context().trace_id != 0:
-        trace_id = format(span.get_span_context().trace_id, '032x')
-        span_id = format(span.get_span_context().span_id, '016x')
-        return trace_id, span_id
-    return None, None
+        return (format(span.get_span_context().trace_id, '032x'), format(span.get_span_context().span_id, '016x'))
+    return (None, None)
+
+@app.post("/passengers")
+def create_passenger(p: Passenger):
+    trace_id, span_id = get_trace_context()
+    logger.info(f"Creating passenger {p.name}", extra={"trace_id": trace_id, "span_id": span_id})
+    conn = get_db_conn()
+    cur = conn.cursor()
+    cur.execute("INSERT INTO passengers (name) VALUES (%s) RETURNING id", (p.name,))
+    passenger_id = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    logger.info(f"Created passenger id={passenger_id}", extra={"trace_id": trace_id, "span_id": span_id})
+    return {"passenger_id": passenger_id, "name": p.name}
 
 @app.post("/request_ride")
 def request_ride(ride_req: RideRequest):
@@ -58,6 +75,13 @@ def request_ride(ride_req: RideRequest):
 
     conn = get_db_conn()
     cur = conn.cursor()
+    # ensure passenger exists
+    cur.execute("SELECT id FROM passengers WHERE id=%s", (ride_req.passenger_id,))
+    if cur.fetchone() is None:
+        cur.close()
+        conn.close()
+        logger.warning("Passenger not found", extra={"trace_id": trace_id, "span_id": span_id})
+        raise HTTPException(status_code=404, detail="Passenger not found")
     cur.execute("INSERT INTO rides (passenger_id, status) VALUES (%s, 'pending') RETURNING id", (ride_req.passenger_id,))
     ride_id = cur.fetchone()[0]
     conn.commit()

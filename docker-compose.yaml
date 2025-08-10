@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
 
@@ -21,8 +21,9 @@ services:
       - DB_USER=postgres
       - DB_PASS=postgres
       - JAEGER_COLLECTOR=http://jaeger:14268/api/traces
+      - LOG_DIR=/app/logs
     volumes:
-      - ./logs/passenger:/var/log/taxi-service
+      - ./logs/passenger:/tmp:rw
     ports:
       - "8001:8001"
 
@@ -36,8 +37,9 @@ services:
       - DB_USER=postgres
       - DB_PASS=postgres
       - JAEGER_COLLECTOR=http://jaeger:14268/api/traces
+      - LOG_DIR=/app/logs
     volumes:
-      - ./logs/driver:/var/log/taxi-service
+      - ./logs/driver:/tmp:rw
     ports:
       - "8002:8002"
 
@@ -50,28 +52,33 @@ services:
       - PASSENGER_API=http://passenger-service:8001
       - DRIVER_API=http://driver-service:8002
       - JAEGER_COLLECTOR=http://jaeger:14268/api/traces
+      - LOG_DIR=/app/logs
     volumes:
-      - ./logs/web-ui:/var/log/taxi-service
+      - ./logs/web-ui:/tmp:rw
     ports:
       - "8000:8000"
+
   locust:
     build: ./locust
     ports:
       - "8089:8089"
+    depends_on:
+      - passenger-service
+      - driver-service
 
   loki:
     image: grafana/loki:2.8.2
     ports:
       - "3100:3100"
     volumes:
-      - ./loki-config.yaml:/etc/loki/local-config.yaml
+      - ./loki-config.yaml:/etc/loki/local-config.yaml:ro
     command: -config.file=/etc/loki/local-config.yaml
 
   promtail:
     image: grafana/promtail:2.8.2
     volumes:
-      - ./promtail-config.yaml:/etc/promtail/promtail.yaml
-      - ./logs:/tmp/:ro
+      - ./promtail-config.yaml:/etc/promtail/promtail.yaml:ro
+      - ./logs:/tmp:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock
     command: -config.file=/etc/promtail/promtail.yaml
