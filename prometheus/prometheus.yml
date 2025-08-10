@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: 'passenger-service'
+    static_configs:
+      - targets: ['passenger-service:8001']
+
+  - job_name: 'driver-service'
+    static_configs:
+      - targets: ['driver-service:8002']
+
+  - job_name: 'web-ui'
+    static_configs:
+      - targets: ['web-ui:8000']

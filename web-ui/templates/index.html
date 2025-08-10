@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Taxi Service - Passenger UI</title>
+</head>
+<body>
+    <h1>Request a Ride</h1>
+    <form action="/request_ride" method="post">
+        <label>Passenger ID:</label>
+        <input type="number" name="passenger_id" required>
+        <button type="submit">Request Ride</button>
+    </form>
+
+    <h2>Check Ride Status</h2>
+    <form action="/ride_status" method="post">
+        <label>Ride ID:</label>
+        <input type="number" name="ride_id" required>
+        <button type="submit">Check Status</button>
+    </form>
+
+    {% if ride_status %}
+    <h3>Ride Status:</h3>
+    <pre>{{ ride_status | tojson(indent=2) }}</pre>
+    {% endif %}
+</body>
+</html>

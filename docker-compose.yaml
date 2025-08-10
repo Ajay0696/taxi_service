@@ -1,0 +1,102 @@
+version: "3.8"
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: taxi_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+  passenger-service:
+    build: ./passenger-service
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_NAME=taxi_db
+      - DB_USER=postgres
+      - DB_PASS=postgres
+      - JAEGER_COLLECTOR=http://jaeger:14268/api/traces
+    volumes:
+      - ./logs/passenger:/var/log/taxi-service
+    ports:
+      - "8001:8001"
+
+  driver-service:
+    build: ./driver-service
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_NAME=taxi_db
+      - DB_USER=postgres
+      - DB_PASS=postgres
+      - JAEGER_COLLECTOR=http://jaeger:14268/api/traces
+    volumes:
+      - ./logs/driver:/var/log/taxi-service
+    ports:
+      - "8002:8002"
+
+  web-ui:
+    build: ./web-ui
+    depends_on:
+      - passenger-service
+      - driver-service
+    environment:
+      - PASSENGER_API=http://passenger-service:8001
+      - DRIVER_API=http://driver-service:8002
+      - JAEGER_COLLECTOR=http://jaeger:14268/api/traces
+    volumes:
+      - ./logs/web-ui:/var/log/taxi-service
+    ports:
+      - "8000:8000"
+  locust:
+    build: ./locust
+    ports:
+      - "8089:8089"
+
+  loki:
+    image: grafana/loki:2.8.2
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yaml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+
+  promtail:
+    image: grafana/promtail:2.8.2
+    volumes:
+      - ./promtail-config.yaml:/etc/promtail/promtail.yaml
+      - ./logs:/tmp/:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/promtail.yaml
+    depends_on:
+      - loki
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    depends_on:
+      - prometheus
+      - loki
+    ports:
+      - "3000:3000"
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.47
+    ports:
+      - "16686:16686"
+      - "14268:14268"
